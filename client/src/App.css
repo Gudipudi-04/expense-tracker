@@ -1,0 +1,516 @@
+
+/* Expense Tracker dashboard */
+
+.app {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #6366f1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #20283b;
+  font-size: clamp(26px, 4vw, 36px);
+  letter-spacing: -1px;
+}
+
+.subtitle {
+  margin: 9px 0 0;
+  color: #7c859a;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.primary-btn,
+.secondary-btn,
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.primary-btn {
+  color: #ffffff;
+  background: #4f46e5;
+}
+
+.primary-btn:hover {
+  background: #4338ca;
+}
+
+.secondary-btn {
+  color: #4f46e5;
+  background: #eef0ff;
+}
+
+.secondary-btn:hover {
+  background: #e0e4ff;
+}
+
+.danger-btn {
+  color: #c63849;
+  background: #fff0f1;
+}
+
+.danger-btn:hover {
+  background: #ffe0e3;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  color: #3730a3;
+  background: #eef2ff;
+  font-size: 14px;
+}
+
+.notice-close {
+  border: none;
+  color: inherit;
+  background: transparent;
+  font-size: 22px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.summary-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid #e9ecf4;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 5px 22px #25345c08;
+}
+
+.summary-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: #6366f1;
+  content: "";
+}
+
+.income-card::before {
+  background: #16a779;
+}
+
+.expense-card::before {
+  background: #ef6464;
+}
+
+.summary-card p {
+  margin: 0 0 16px;
+  color: #778198;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summary-card h2 {
+  margin: 0 0 12px;
+  color: #20283b;
+  font-size: clamp(21px, 2.5vw, 30px);
+  letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
+}
+
+.summary-card span {
+  color: #9aa2b3;
+  font-size: 12px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.panel {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e9ecf4;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 5px 22px #25345c08;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.panel-heading h2 {
+  margin: 0 0 7px;
+  color: #20283b;
+  font-size: 17px;
+  letter-spacing: -0.3px;
+}
+
+.panel-heading p {
+  margin: 0;
+  color: #929bad;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+}
+
+.doughnut-container {
+  position: relative;
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+}
+
+.empty-chart {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.empty-chart-icon {
+  color: #c4c8f9;
+  font-size: 48px;
+}
+
+.empty-chart p {
+  margin: 10px 0 5px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.empty-chart span {
+  color: #929bad;
+  font-size: 12px;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.5fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.transaction-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px 13px;
+}
+
+.transaction-form label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  color: #4b556b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.transaction-form input,
+.transaction-form select,
+.toolbar input,
+.toolbar select {
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  padding: 11px 12px;
+  border: 1px solid #dfe3ed;
+  border-radius: 8px;
+  outline: none;
+  color: #20283b;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.transaction-form input:focus,
+.transaction-form select:focus,
+.toolbar input:focus,
+.toolbar select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px #6366f11c;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 135px;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.transaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.transaction-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid #edf0f6;
+  border-radius: 11px;
+  background: #ffffff;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.transaction-row:hover {
+  border-color: #d8dcf8;
+  background: #fcfcff;
+}
+
+.transaction-symbol {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: #6366f1;
+  background: #eef0ff;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.transaction-info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transaction-info strong {
+  overflow-wrap: anywhere;
+  color: #293247;
+  font-size: 13px;
+}
+
+.transaction-info span {
+  color: #929bad;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.transaction-value {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.transaction-value strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.positive {
+  color: #15966a;
+}
+
+.negative {
+  color: #e04f5f;
+}
+
+.delete-btn {
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  color: #d9384b;
+  background: #fff0f1;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.delete-btn:hover {
+  background: #ffe0e3;
+}
+
+.empty-state {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.empty-state-icon {
+  color: #a5a9f6;
+  font-size: 38px;
+}
+
+.empty-state h3 {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #929bad;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.transaction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 17px;
+  border-top: 1px solid #edf0f6;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+  padding: 20px 0 5px;
+  color: #929bad;
+  font-size: 11px;
+}
+
+.footer p {
+  margin: 0;
+}
+
+.footer span {
+  line-height: 1.6;
+}
+
+@media (max-width: 1000px) {
+  .app {
+    padding: 24px;
+  }
+
+  .charts-grid,
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .app {
+    padding: 16px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 20px;
+  }
+
+  .panel {
+    padding: 17px;
+  }
+
+  .transaction-form {
+    grid-template-columns: 1fr;
+  }
+
+  .full-width {
+    grid-column: auto;
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-row {
+    align-items: flex-start;
+    gap: 9px;
+    padding: 11px;
+  }
+
+  .transaction-symbol {
+    width: 34px;
+    height: 34px;
+  }
+
+  .transaction-value strong {
+    font-size: 11px;
+  }
+
+  .transaction-actions {
+    flex-direction: column;
+  }
+
+  .transaction-actions button {
+    width: 100%;
+  }
+
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
