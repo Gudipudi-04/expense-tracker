@@ -10,6 +10,9 @@ import {
   Legend,
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
+import { auth, db } from "./firebase";
+import { signInAnonymously } from "firebase/auth";
+import { onValue, ref, set } from "firebase/database";
 import "./App.css";
 
 ChartJS.register(
@@ -40,7 +43,9 @@ function getSavedTransactions() {
 }
 
 export default function App() {
-  const [transactions, setTransactions] = useState(getSavedTransactions);
+  const [transactions, setTransactions] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [ready, setReady] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("expense");
@@ -50,26 +55,95 @@ export default function App() {
   );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState("Connecting to Firebase...");
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(transactions)
-      );
-    } catch {
-      setNotice("Unable to save data in this browser.");
+    let unsubscribe = () => {};
+    let cancelled = false;
+    let migrationStarted = false;
+
+    async function connectFirebase() {
+      try {
+        const credential = await signInAnonymously(auth);
+        if (cancelled) return;
+
+        const uid = credential.user.uid;
+        setUserId(uid);
+
+        const transactionsRef = ref(
+          db,
+          `users/${uid}/transactions`
+        );
+
+        unsubscribe = onValue(
+          transactionsRef,
+          async (snapshot) => {
+            try {
+              if (snapshot.exists()) {
+                const data = Object.values(snapshot.val());
+                setTransactions(data);
+              } else if (!migrationStarted) {
+                migrationStarted = true;
+                const oldData = getSavedTransactions();
+
+                if (oldData.length > 0) {
+                  const dataToSave = Object.fromEntries(
+                    oldData.map((item) => [item.id, item])
+                  );
+
+                  await set(transactionsRef, dataToSave);
+                  setTransactions(oldData);
+                } else {
+                  setTransactions([]);
+                }
+              }
+
+              if (!cancelled) {
+                setReady(true);
+                setNotice("Firebase connected successfully!");
+              }
+            } catch (error) {
+              console.error("Firebase data error:", error);
+              if (!cancelled) {
+                setReady(true);
+                setNotice("Could not load or migrate transactions.");
+              }
+            }
+          },
+          (error) => {
+            console.error("Firebase read error:", error);
+            if (!cancelled) {
+              setReady(true);
+              setNotice("Database access failed. Check Firebase rules.");
+            }
+          }
+        );
+      } catch (error) {
+        console.error("Firebase connection error:", error);
+        if (!cancelled) {
+          setReady(true);
+          setNotice(
+            "Firebase sign-in failed. Check Anonymous Authentication."
+          );
+        }
+      }
     }
-  }, [transactions]);
+
+    connectFirebase();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const income = transactions
     .filter((item) => item.type === "income")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .reduce((sum, item) => sum + Number(item.amount), 0);
 
   const expenses = transactions
     .filter((item) => item.type === "expense")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .reduce((sum, item) => sum + Number(item.amount), 0);
 
   const balance = income - expenses;
 
@@ -120,9 +194,9 @@ export default function App() {
 
       if (month) {
         if (item.type === "income") {
-          month.income += item.amount;
+          month.income += Number(item.amount);
         } else {
-          month.expense += item.amount;
+          month.expense += Number(item.amount);
         }
       }
     });
@@ -137,14 +211,19 @@ export default function App() {
       .filter((item) => item.type === "expense")
       .forEach((item) => {
         totals[item.category] =
-          (totals[item.category] || 0) + item.amount;
+          (totals[item.category] || 0) + Number(item.amount);
       });
 
     return Object.entries(totals);
   }, [transactions]);
 
-  function addTransaction(event) {
+  async function addTransaction(event) {
     event.preventDefault();
+
+    if (!ready || !userId) {
+      setNotice("Please wait for Firebase to connect.");
+      return;
+    }
 
     const numericAmount = Number(amount);
 
@@ -172,21 +251,34 @@ export default function App() {
       date,
     };
 
-    setTransactions((previous) => [
-      ...previous,
-      newTransaction,
-    ]);
+    try {
+      await set(
+        ref(db, `users/${userId}/transactions/${newTransaction.id}`),
+        newTransaction
+      );
 
-    setTitle("");
-    setAmount("");
-    setNotice("Transaction added successfully!");
+      setTitle("");
+      setAmount("");
+      setNotice("Transaction saved to Firebase!");
+    } catch (error) {
+      console.error("Save error:", error);
+      setNotice("Could not save transaction. Check database rules.");
+    }
   }
 
-  function deleteTransaction(id) {
-    setTransactions((previous) =>
-      previous.filter((item) => item.id !== id)
-    );
-    setNotice("Transaction deleted.");
+  async function deleteTransaction(id) {
+    if (!userId) return;
+
+    try {
+      await set(
+        ref(db, `users/${userId}/transactions/${id}`),
+        null
+      );
+      setNotice("Transaction deleted.");
+    } catch (error) {
+      console.error("Delete error:", error);
+      setNotice("Could not delete transaction.");
+    }
   }
 
   function exportCSV() {
@@ -227,15 +319,25 @@ export default function App() {
     setNotice("CSV downloaded successfully.");
   }
 
-  function clearAll() {
+  async function clearAll() {
     if (!transactions.length) {
       setNotice("There are no transactions to clear.");
       return;
     }
 
+    if (!userId) {
+      setNotice("Firebase is not connected.");
+      return;
+    }
+
     if (window.confirm("Delete all transactions? This cannot be undone.")) {
-      setTransactions([]);
-      setNotice("All transactions deleted.");
+      try {
+        await set(ref(db, `users/${userId}/transactions`), null);
+        setNotice("All transactions deleted.");
+      } catch (error) {
+        console.error("Clear error:", error);
+        setNotice("Could not clear transactions.");
+      }
     }
   }
 
@@ -465,8 +567,12 @@ export default function App() {
               />
             </label>
 
-            <button className="primary-btn full-width" type="submit">
-              + Add Transaction
+            <button
+              className="primary-btn full-width"
+              type="submit"
+              disabled={!ready}
+            >
+              {ready ? "+ Add Transaction" : "Connecting..."}
             </button>
           </form>
         </article>
@@ -527,7 +633,7 @@ export default function App() {
                       }
                     >
                       {item.type === "income" ? "+" : "−"}
-                      {money(item.amount)}
+                      {money(Number(item.amount))}
                     </strong>
 
                     <button
@@ -557,7 +663,11 @@ export default function App() {
 
       <footer className="footer">
         <p>Expense Tracker · Manage your money with confidence.</p>
-        <span>Your transactions are saved in this browser.</span>
+        <span>
+          {ready
+            ? "Your transactions are synced with Firebase."
+            : "Connecting to Firebase..."}
+        </span>
       </footer>
     </main>
   );
