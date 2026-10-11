@@ -3,7 +3,7 @@ import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "NEE_API_KEY",
+  apiKey: "AIzaSyBPn3gDAuQkDkIRpOoVZYNqdHIxDjGgko0",
   authDomain: "expense-tracker-82a75.firebaseapp.com",
   databaseURL: "https://expense-tracker-82a75-default-rtdb.firebaseio.com",
   projectId: "expense-tracker-82a75",
