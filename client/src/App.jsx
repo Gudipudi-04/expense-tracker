@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
@@ -22,13 +23,10 @@ ChartJS.register(
   Legend
 );
 
-const STORAGE_KEY = "expense-tracker-transactions";
-const BUDGET_KEY = "expense-tracker-monthly-budget";
+const TRANSACTIONS_KEY = "expense_tracker_transactions";
+const BUDGET_KEY = "expense_tracker_budget";
 
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+const today = () => new Date().toISOString().slice(0, 10);
 
 const money = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -37,70 +35,26 @@ const money = (amount) =>
     maximumFractionDigits: 2,
   }).format(Number(amount) || 0);
 
-const getMonthKey = (date = "") => String(date).slice(0, 7);
-
-const getSavedTransactions = () => {
+function readTransactions() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const parsed = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    const saved = localStorage.getItem(TRANSACTIONS_KEY);
+    return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
   }
-};
+}
 
-const categories = [
-  "Food",
-  "Transport",
-  "Shopping",
-  "Bills",
-  "Health",
-  "Education",
-  "Entertainment",
-  "Salary",
-  "Business",
-  "Other",
-];
-
-const panelStyle = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "14px",
-  boxShadow: "0 3px 14px rgba(0,0,0,0.07)",
-  minWidth: 0,
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "11px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  boxSizing: "border-box",
-  fontSize: "14px",
-};
-
-const buttonStyle = {
-  padding: "10px 15px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#2563eb",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 600,
-};
+function readBudget() {
+  try {
+    return localStorage.getItem(BUDGET_KEY) || "10000";
+  } catch {
+    return "10000";
+  }
+}
 
 export default function App() {
-  const [transactions, setTransactions] = useState(getSavedTransactions);
-
-  const [budget, setBudget] = useState(() => {
-    try {
-      const saved = localStorage.getItem(BUDGET_KEY);
-      return saved !== null ? Math.max(0, Number(saved) || 0) : 10000;
-    } catch {
-      return 10000;
-    }
-  });
-
+  const [transactions, setTransactions] = useState(readTransactions);
+  const [budget, setBudget] = useState(readBudget);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("expense");
@@ -108,207 +62,113 @@ export default function App() {
   const [date, setDate] = useState(today());
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [selectedMonth, setSelectedMonth] = useState(
+  const [filterMonth, setFilterMonth] = useState(
     today().slice(0, 7)
   );
+  const [appError, setAppError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(transactions)
-    );
+    try {
+      localStorage.setItem(
+        TRANSACTIONS_KEY,
+        JSON.stringify(transactions)
+      );
+    } catch {
+      setAppError("Browser storage is full. Export your data for backup.");
+    }
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem(BUDGET_KEY, String(budget));
+    try {
+      localStorage.setItem(BUDGET_KEY, budget);
+    } catch {
+      setAppError("Could not save the budget in this browser.");
+    }
   }, [budget]);
 
-  const currentMonth = today().slice(0, 7);
-
-  const totals = useMemo(() => {
-    const income = transactions
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    const expenses = transactions
-      .filter((item) => item.type === "expense")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    return {
-      income,
-      expenses,
-      balance: income - expenses,
-    };
-  }, [transactions]);
-
-  const monthlyExpenses = useMemo(
+  const monthlyTransactions = useMemo(
     () =>
-      transactions
-        .filter(
-          (item) =>
-            item.type === "expense" &&
-            getMonthKey(item.date) === currentMonth
-        )
-        .reduce(
-          (sum, item) => sum + Number(item.amount || 0),
-          0
-        ),
-    [transactions, currentMonth]
+      transactions.filter(
+        (transaction) =>
+          (transaction.date || "").slice(0, 7) === filterMonth
+      ),
+    [transactions, filterMonth]
   );
 
-  const budgetRemaining = budget - monthlyExpenses;
+  const income = monthlyTransactions
+    .filter((t) => t.type === "income")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
+  const expenses = monthlyTransactions
+    .filter((t) => t.type === "expense")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+  const balance = income - expenses;
+  const budgetAmount = Math.max(0, Number(budget) || 0);
   const budgetPercent =
-    budget > 0
-      ? Math.min((monthlyExpenses / budget) * 100, 100)
-      : 0;
+    budgetAmount > 0 ? (expenses / budgetAmount) * 100 : 0;
 
-  const monthlyReport = useMemo(() => {
-    const items = transactions.filter(
-      (item) => getMonthKey(item.date) === selectedMonth
-    );
-
-    const income = items
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    const expenses = items
-      .filter((item) => item.type === "expense")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    return {
-      items,
-      income,
-      expenses,
-      savings: income - expenses,
-    };
-  }, [transactions, selectedMonth]);
-
-  const monthlyData = useMemo(() => {
-    const months = [];
-
-    for (let offset = 5; offset >= 0; offset--) {
-      const monthDate = new Date();
-      monthDate.setDate(1);
-      monthDate.setMonth(monthDate.getMonth() - offset);
-
-      const key = `${monthDate.getFullYear()}-${String(
-        monthDate.getMonth() + 1
-      ).padStart(2, "0")}`;
-
-      const label = monthDate.toLocaleDateString("en-IN", {
-        month: "short",
-        year: "2-digit",
-      });
-
-      const items = transactions.filter(
-        (item) => getMonthKey(item.date) === key
-      );
-
-      const income = items
-        .filter((item) => item.type === "income")
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-      const expense = items
-        .filter((item) => item.type === "expense")
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-      months.push({ key, label, income, expense });
-    }
-
-    return months;
-  }, [transactions]);
-
-  const categoryData = useMemo(() => {
-    const grouped = {};
-
-    transactions
-      .filter(
-        (item) =>
-          item.type === "expense" &&
-          getMonthKey(item.date) === selectedMonth
-      )
-      .forEach((item) => {
-        const name = item.category || "Other";
-        grouped[name] =
-          (grouped[name] || 0) + Number(item.amount || 0);
-      });
-
-    return {
-      labels: Object.keys(grouped),
-      datasets: [
-        {
-          data: Object.values(grouped),
-          backgroundColor: [
-            "#2563eb",
-            "#16a34a",
-            "#f59e0b",
-            "#ef4444",
-            "#8b5cf6",
-            "#06b6d4",
-            "#ec4899",
-            "#64748b",
-            "#84cc16",
-            "#f97316",
-          ],
-        },
-      ],
-    };
-  }, [transactions, selectedMonth]);
-
-  const barChartData = {
-    labels: monthlyData.map((month) => month.label),
-    datasets: [
-      {
-        label: "Income",
-        data: monthlyData.map((month) => month.income),
-        backgroundColor: "#16a34a",
-      },
-      {
-        label: "Expenses",
-        data: monthlyData.map((month) => month.expense),
-        backgroundColor: "#ef4444",
-      },
-    ],
-  };
-
-  const filteredTransactions = useMemo(() => {
+  const visibleTransactions = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return [...transactions]
-      .filter(
-        (item) =>
-          filterType === "all" || item.type === filterType
-      )
-      .filter(
-        (item) =>
+      .filter((t) => {
+        const matchesSearch =
           !query ||
-          String(item.title || "").toLowerCase().includes(query) ||
-          String(item.category || "").toLowerCase().includes(query)
-      )
-      .sort((a, b) =>
-        String(b.date).localeCompare(String(a.date))
-      );
-  }, [transactions, search, filterType]);
+          (t.title || "").toLowerCase().includes(query) ||
+          (t.category || "").toLowerCase().includes(query);
 
-  const handleSubmit = (event) => {
+        const matchesType =
+          filterType === "all" || t.type === filterType;
+
+        const matchesMonth =
+          !filterMonth ||
+          (t.date || "").slice(0, 7) === filterMonth;
+
+        return matchesSearch && matchesType && matchesMonth;
+      })
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [transactions, search, filterType, filterMonth]);
+
+  const categories = [
+    "Food",
+    "Travel",
+    "Shopping",
+    "Bills",
+    "Health",
+    "Education",
+    "Entertainment",
+    "Salary",
+    "Business",
+    "Other",
+  ];
+
+  function addTransaction(event) {
     event.preventDefault();
+    setAppError("");
+    setMessage("");
 
     const cleanTitle = title.trim();
     const numericAmount = Number(amount);
 
-    if (
-      !cleanTitle ||
-      !Number.isFinite(numericAmount) ||
-      numericAmount <= 0 ||
-      !date
-    ) {
-      window.alert("Please enter valid transaction details.");
+    if (!cleanTitle) {
+      setAppError("Please enter a transaction description.");
+      return;
+    }
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setAppError("Please enter an amount greater than zero.");
+      return;
+    }
+
+    if (!date) {
+      setAppError("Please select a date.");
       return;
     }
 
     const newTransaction = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       title: cleanTitle,
       amount: numericAmount,
       type,
@@ -316,56 +176,64 @@ export default function App() {
       date,
     };
 
-    setTransactions((current) => [
-      newTransaction,
-      ...current,
-    ]);
-
+    setTransactions((previous) => [newTransaction, ...previous]);
     setTitle("");
     setAmount("");
     setType("expense");
     setCategory("Food");
     setDate(today());
-  };
+    setMessage("Transaction added and saved in this browser.");
+  }
 
-  const deleteTransaction = (id) => {
-    if (window.confirm("Delete this transaction?")) {
-      setTransactions((current) =>
-        current.filter((item) => item.id !== id)
-      );
+  function deleteTransaction(id) {
+    if (!window.confirm("Delete this transaction?")) return;
+
+    setTransactions((previous) =>
+      previous.filter((transaction) => transaction.id !== id)
+    );
+    setMessage("Transaction deleted.");
+    setAppError("");
+  }
+
+  function clearAllTransactions() {
+    if (transactions.length === 0) {
+      setMessage("There are no transactions to clear.");
+      return;
     }
-  };
 
-  const clearTransactions = () => {
     if (
-      transactions.length > 0 &&
-      window.confirm("Delete all transactions?")
-    ) {
-      setTransactions([]);
-    }
-  };
-
-  const exportCSV = () => {
-    const rows = [
-      ["Date", "Description", "Type", "Category", "Amount"],
-      ...filteredTransactions.map((item) => [
-        item.date,
-        item.title,
-        item.type,
-        item.category,
-        Number(item.amount || 0).toFixed(2),
-      ]),
-    ];
-
-    const csv = rows
-      .map((row) =>
-        row
-          .map(
-            (value) =>
-              `"${String(value ?? "").replace(/"/g, '""')}"`
-          )
-          .join(",")
+      !window.confirm(
+        "Delete ALL transactions? This action cannot be undone."
       )
+    ) {
+      return;
+    }
+
+    setTransactions([]);
+    setMessage("All transactions deleted.");
+    setAppError("");
+  }
+
+  function exportCSV() {
+    if (!transactions.length) {
+      setAppError("No transactions available to export.");
+      return;
+    }
+
+    const headers = ["Date", "Description", "Type", "Category", "Amount"];
+    const rows = transactions.map((t) => [
+      t.date,
+      t.title,
+      t.type,
+      t.category,
+      t.amount,
+    ]);
+
+    const escapeCSV = (value) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map(escapeCSV).join(","))
       .join("\r\n");
 
     const blob = new Blob(["\uFEFF" + csv], {
@@ -374,320 +242,275 @@ export default function App() {
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
-    link.download = "expense-tracker-transactions.csv";
-    document.body.appendChild(link);
+    link.download = `expense-report-${today()}.csv`;
     link.click();
-    link.remove();
     URL.revokeObjectURL(url);
-  };
+    setMessage("CSV report downloaded.");
+  }
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
+  function exportPDF() {
+    if (!transactions.length) {
+      setAppError("No transactions available to export.");
+      return;
+    }
 
-    doc.setFontSize(18);
-    doc.text("Expense Tracker Transactions", 14, 18);
+    const pdf = new jsPDF();
 
-    autoTable(doc, {
-      startY: 28,
+    pdf.setFontSize(18);
+    pdf.text("Expense Tracker Report", 14, 18);
+
+    pdf.setFontSize(10);
+    pdf.text(`Generated: ${today()}`, 14, 26);
+    pdf.text(`Income: ${money(income)}`, 14, 34);
+    pdf.text(`Expenses: ${money(expenses)}`, 14, 40);
+    pdf.text(`Balance: ${money(balance)}`, 14, 46);
+
+    autoTable(pdf, {
+      startY: 53,
       head: [["Date", "Description", "Type", "Category", "Amount"]],
-      body: filteredTransactions.map((item) => [
-        item.date,
-        item.title,
-        item.type,
-        item.category,
-        money(item.amount),
-      ]),
+      body: [...transactions]
+        .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+        .map((t) => [
+          t.date,
+          t.title,
+          t.type,
+          t.category,
+          money(t.amount),
+        ]),
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [37, 99, 235] },
+      headStyles: { fillColor: [45, 80, 140] },
     });
 
-    doc.save("expense-tracker-transactions.pdf");
-  };
+    pdf.save(`expense-report-${today()}.pdf`);
+    setMessage("PDF report downloaded.");
+  }
 
-  const exportMonthlyPDF = () => {
-    const doc = new jsPDF();
+  function exportMonthlyReport() {
+    const pdf = new jsPDF();
 
-    doc.setFontSize(18);
-    doc.text(`Monthly Report: ${selectedMonth}`, 14, 18);
+    pdf.setFontSize(18);
+    pdf.text("Monthly Financial Report", 14, 18);
+    pdf.setFontSize(11);
+    pdf.text(`Month: ${filterMonth}`, 14, 28);
+    pdf.text(`Total income: ${money(income)}`, 14, 38);
+    pdf.text(`Total expenses: ${money(expenses)}`, 14, 46);
+    pdf.text(`Net balance: ${money(balance)}`, 14, 54);
+    pdf.text(`Budget: ${money(budgetAmount)}`, 14, 62);
 
-    doc.setFontSize(11);
-    doc.text(`Income: ${money(monthlyReport.income)}`, 14, 28);
-    doc.text(`Expenses: ${money(monthlyReport.expenses)}`, 14, 35);
-    doc.text(`Net savings: ${money(monthlyReport.savings)}`, 14, 42);
-
-    autoTable(doc, {
-      startY: 49,
+    autoTable(pdf, {
+      startY: 70,
       head: [["Date", "Description", "Type", "Category", "Amount"]],
-      body: monthlyReport.items.map((item) => [
-        item.date,
-        item.title,
-        item.type,
-        item.category,
-        money(item.amount),
+      body: monthlyTransactions.map((t) => [
+        t.date,
+        t.title,
+        t.type,
+        t.category,
+        money(t.amount),
       ]),
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [37, 99, 235] },
     });
 
-    doc.save(`monthly-report-${selectedMonth}.pdf`);
+    pdf.save(`monthly-report-${filterMonth}.pdf`);
+    setMessage("Monthly report downloaded.");
+  }
+
+  const expenseByCategory = monthlyTransactions
+    .filter((t) => t.type === "expense")
+    .reduce((result, t) => {
+      result[t.category] =
+        (result[t.category] || 0) + Number(t.amount || 0);
+      return result;
+    }, {});
+
+  const categoryNames = Object.keys(expenseByCategory);
+
+  const doughnutData = {
+    labels: categoryNames,
+    datasets: [
+      {
+        label: "Expenses",
+        data: categoryNames.map((name) => expenseByCategory[name]),
+        backgroundColor: [
+          "#4f46e5",
+          "#0d9488",
+          "#f59e0b",
+          "#e11d48",
+          "#0284c7",
+          "#9333ea",
+          "#65a30d",
+          "#ea580c",
+          "#64748b",
+          "#db2777",
+        ],
+        borderWidth: 1,
+      },
+    ],
   };
 
-  const labelStyle = {
-    display: "block",
-    marginBottom: 6,
-    fontWeight: 600,
-    fontSize: 14,
-  };
-
-  const monthLabel = new Date(
-    `${selectedMonth}-01T12:00:00`
-  ).toLocaleDateString("en-IN", {
-    month: "long",
-    year: "numeric",
+  const lastSixMonths = Array.from({ length: 6 }, (_, index) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - (5 - index));
+    return d.toISOString().slice(0, 7);
   });
 
+  const barData = {
+    labels: lastSixMonths,
+    datasets: [
+      {
+        label: "Income",
+        data: lastSixMonths.map((month) =>
+          transactions
+            .filter(
+              (t) => t.date?.slice(0, 7) === month && t.type === "income"
+            )
+            .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+        ),
+        backgroundColor: "#16a34a",
+      },
+      {
+        label: "Expenses",
+        data: lastSixMonths.map((month) =>
+          transactions
+            .filter(
+              (t) => t.date?.slice(0, 7) === month && t.type === "expense"
+            )
+            .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+        ),
+        backgroundColor: "#e11d48",
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: "bottom" } },
+  };
+
   return (
-    <main
-      style={{
-        maxWidth: 1200,
-        margin: "0 auto",
-        padding: "24px 16px",
-        color: "#111827",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-          marginBottom: 24,
-        }}
-      >
+    <main className="app-container">
+      <header className="app-header">
         <div>
-          <h1 style={{ margin: 0 }}>Expense Tracker</h1>
-          <p style={{ color: "#64748b" }}>
-            Track your income, expenses, and monthly budget.
-          </p>
+          <h1>Expense Tracker</h1>
+          <p>Track your money. Manage your future.</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={buttonStyle} onClick={exportCSV}>
-            Export CSV
-          </button>
-          <button style={buttonStyle} onClick={exportPDF}>
-            Export PDF
-          </button>
-        </div>
+        <span className="storage-badge">Local storage</span>
       </header>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
-        {[
-          ["Total Income", totals.income, "#16a34a"],
-          ["Total Expenses", totals.expenses, "#dc2626"],
-          ["Current Balance", totals.balance, "#2563eb"],
-        ].map(([label, value, color]) => (
-          <article key={label} style={panelStyle}>
-            <p style={{ color: "#64748b", margin: 0 }}>{label}</p>
-            <h2 style={{ color, marginBottom: 0 }}>{money(value)}</h2>
-          </article>
-        ))}
-      </section>
-
-      <section style={{ ...panelStyle, marginBottom: 20 }}>
-        <h2 style={{ marginTop: 0 }}>Monthly Budget</h2>
-        <label>
-          Monthly budget (₹)
-          <input
-            type="number"
-            min="0"
-            value={budget}
-            onChange={(event) =>
-              setBudget(Math.max(0, Number(event.target.value) || 0))
-            }
-            style={{ ...inputStyle, maxWidth: 220, marginLeft: 10 }}
-          />
-        </label>
-        <p>Spent this month: {money(monthlyExpenses)}</p>
-        <div
-          style={{
-            height: 12,
-            background: "#e5e7eb",
-            borderRadius: 99,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: `${budgetPercent}%`,
-              height: "100%",
-              background: monthlyExpenses > budget ? "#dc2626" : "#16a34a",
-            }}
-          />
-        </div>
-        <p
-          style={{
-            color: budgetRemaining < 0 ? "#dc2626" : "#16a34a",
-            fontWeight: 700,
-          }}
-        >
-          {budgetRemaining < 0
-            ? `Over budget by ${money(Math.abs(budgetRemaining))}`
-            : `Budget remaining: ${money(budgetRemaining)}`}
-        </p>
-      </section>
-
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 20,
-          marginBottom: 20,
-        }}
-      >
-        <article style={panelStyle}>
-          <h2 style={{ marginTop: 0 }}>Income vs Expenses</h2>
-          <Bar
-            data={barChartData}
-            options={{
-              responsive: true,
-              plugins: { legend: { position: "bottom" } },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: { callback: (value) => `₹${value}` },
-                },
-              },
-            }}
-          />
-        </article>
-
-        <article style={panelStyle}>
-          <h2 style={{ marginTop: 0 }}>Expense Categories</h2>
-          <label style={{ display: "block", marginBottom: 12 }}>
-            Report month{" "}
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(event) =>
-                setSelectedMonth(event.target.value || currentMonth)
-              }
-              style={{ ...inputStyle, maxWidth: 220, marginTop: 8 }}
-            />
-          </label>
-          {categoryData.labels.length > 0 ? (
-            <Doughnut
-              data={categoryData}
-              options={{
-                responsive: true,
-                plugins: { legend: { position: "bottom" } },
-              }}
-            />
-          ) : (
-            <p style={{ color: "#64748b" }}>
-              No expenses recorded for {monthLabel}.
-            </p>
-          )}
-        </article>
-      </section>
-
-      <section style={{ ...panelStyle, marginBottom: 20 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h2 style={{ margin: 0 }}>Monthly Report</h2>
-            <p style={{ color: "#64748b" }}>{monthLabel}</p>
-          </div>
-          <button style={buttonStyle} onClick={exportMonthlyPDF}>
-            Export Monthly PDF
+      {appError && (
+        <div className="app-alert error" role="alert">
+          {appError}
+          <button onClick={() => setAppError("")} aria-label="Dismiss error">
+            ×
           </button>
         </div>
+      )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 12,
-          }}
-        >
-          <div>
-            <span>Income</span>
-            <h3 style={{ color: "#16a34a" }}>
-              {money(monthlyReport.income)}
-            </h3>
-          </div>
-          <div>
-            <span>Expenses</span>
-            <h3 style={{ color: "#dc2626" }}>
-              {money(monthlyReport.expenses)}
-            </h3>
-          </div>
-          <div>
-            <span>Net savings</span>
-            <h3 style={{ color: "#2563eb" }}>
-              {money(monthlyReport.savings)}
-            </h3>
-          </div>
+      {message && (
+        <div className="app-alert success" role="status">
+          {message}
+          <button onClick={() => setMessage("")} aria-label="Dismiss message">
+            ×
+          </button>
         </div>
+      )}
+
+      <section className="summary-grid">
+        <article className="summary-card">
+          <h3>Monthly Income</h3>
+          <p className="income-text">{money(income)}</p>
+        </article>
+        <article className="summary-card">
+          <h3>Monthly Expenses</h3>
+          <p className="expense-text">{money(expenses)}</p>
+        </article>
+        <article className="summary-card">
+          <h3>Monthly Balance</h3>
+          <p className={balance < 0 ? "expense-text" : "income-text"}>
+            {money(balance)}
+          </p>
+        </article>
+        <article className="summary-card">
+          <h3>Transactions</h3>
+          <p>{monthlyTransactions.length}</p>
+        </article>
       </section>
 
-      <section style={{ ...panelStyle, marginBottom: 20 }}>
-        <h2 style={{ marginTop: 0 }}>Add Transaction</h2>
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            gap: 14,
-            alignItems: "end",
-          }}
-        >
+      <section className="panel">
+        <h2>Monthly Budget</h2>
+        <div className="budget-controls">
           <label>
-            <span style={labelStyle}>Description</span>
+            Budget amount (₹)
             <input
-              style={inputStyle}
+              type="number"
+              min="0"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+            />
+          </label>
+          <div className="budget-status">
+            <span>
+              Spent: {money(expenses)} / {money(budgetAmount)}
+            </span>
+            <span>
+              {budgetAmount > 0
+                ? `${Math.round(budgetPercent)}% used`
+                : "Set a budget"}
+            </span>
+          </div>
+        </div>
+        <div className="progress-track">
+          <div
+            className={`progress-fill ${
+              budgetPercent >= 100 ? "over-budget" : ""
+            }`}
+            style={{
+              width: `${Math.min(budgetPercent, 100)}%`,
+            }}
+          />
+        </div>
+        {budgetAmount > 0 && expenses > budgetAmount && (
+          <p className="expense-text">
+            You are over budget by {money(expenses - budgetAmount)}.
+          </p>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Add Transaction</h2>
+        <form onSubmit={addTransaction} className="transaction-form">
+          <label>
+            Description
+            <input
+              type="text"
+              placeholder="e.g. Groceries"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Grocery shopping"
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={100}
               required
             />
           </label>
 
           <label>
-            <span style={labelStyle}>Amount (₹)</span>
+            Amount (₹)
             <input
-              style={inputStyle}
               type="number"
               min="0.01"
               step="0.01"
+              placeholder="500"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(e) => setAmount(e.target.value)}
               required
             />
           </label>
 
           <label>
-            <span style={labelStyle}>Type</span>
+            Type
             <select
-              style={inputStyle}
               value={type}
-              onChange={(event) => setType(event.target.value)}
+              onChange={(e) => setType(e.target.value)}
             >
               <option value="expense">Expense</option>
               <option value="income">Income</option>
@@ -695,11 +518,10 @@ export default function App() {
           </label>
 
           <label>
-            <span style={labelStyle}>Category</span>
+            Category
             <select
-              style={inputStyle}
               value={category}
-              onChange={(event) => setCategory(event.target.value)}
+              onChange={(e) => setCategory(e.target.value)}
             >
               {categories.map((item) => (
                 <option key={item} value={item}>
@@ -710,154 +532,155 @@ export default function App() {
           </label>
 
           <label>
-            <span style={labelStyle}>Date</span>
+            Date
             <input
-              style={inputStyle}
               type="date"
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(e) => setDate(e.target.value)}
               required
             />
           </label>
 
-          <button style={buttonStyle} type="submit">
+          <button className="primary-button" type="submit">
             Add Transaction
           </button>
         </form>
       </section>
 
-      <section style={panelStyle}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <h2>Transactions</h2>
-          <button
-            style={{ ...buttonStyle, background: "#dc2626" }}
-            onClick={clearTransactions}
-          >
-            Clear All
-          </button>
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Reports & Charts</h2>
+          <label>
+            Select month
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+            />
+          </label>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
-          <input
-            style={inputStyle}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search description/category..."
-          />
-          <select
-            style={inputStyle}
-            value={filterType}
-            onChange={(event) => setFilterType(event.target.value)}
-          >
-            <option value="all">All types</option>
-            <option value="income">Income only</option>
-            <option value="expense">Expenses only</option>
-          </select>
-        </div>
+        <div className="charts-grid">
+          <article className="chart-card">
+            <h3>Income vs Expenses</h3>
+            <div className="chart-area">
+              <Bar data={barData} options={chartOptions} />
+            </div>
+          </article>
 
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 650,
-            }}
-          >
-            <thead>
-              <tr style={{ textAlign: "left", background: "#f8fafc" }}>
-                {["Date", "Description", "Category", "Type", "Amount", "Action"].map(
-                  (heading) => (
-                    <th
-                      key={heading}
-                      style={{
-                        padding: 12,
-                        borderBottom: "1px solid #e2e8f0",
-                      }}
-                    >
-                      {heading}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.map((item) => (
-                <tr
-                  key={item.id}
-                  style={{ borderBottom: "1px solid #e2e8f0" }}
-                >
-                  <td style={{ padding: 12 }}>{item.date}</td>
-                  <td style={{ padding: 12 }}>{item.title}</td>
-                  <td style={{ padding: 12 }}>{item.category}</td>
-                  <td style={{ padding: 12 }}>{item.type}</td>
-                  <td
-                    style={{
-                      padding: 12,
-                      color: item.type === "income" ? "#16a34a" : "#dc2626",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {item.type === "income" ? "+" : "-"}
-                    {money(item.amount)}
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <button
-                      style={{
-                        ...buttonStyle,
-                        background: "#dc2626",
-                        padding: "7px 10px",
-                      }}
-                      onClick={() => deleteTransaction(item.id)}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredTransactions.length === 0 && (
-                <tr>
-                  <td
-                    colSpan="6"
-                    style={{
-                      padding: 20,
-                      textAlign: "center",
-                      color: "#64748b",
-                    }}
-                  >
-                    No transactions found. Add a transaction to get started.
-                  </td>
-                </tr>
+          <article className="chart-card">
+            <h3>Expenses by Category</h3>
+            <div className="chart-area">
+              {categoryNames.length ? (
+                <Doughnut data={doughnutData} options={chartOptions} />
+              ) : (
+                <p>No expense data for this month.</p>
               )}
-            </tbody>
-          </table>
+            </div>
+          </article>
+        </div>
+
+        <div className="button-row">
+          <button type="button" onClick={exportMonthlyReport}>
+            Download Monthly PDF
+          </button>
+          <button type="button" onClick={exportCSV}>
+            Export CSV
+          </button>
+          <button type="button" onClick={exportPDF}>
+            Export All PDF
+          </button>
         </div>
       </section>
 
-      <p
-        style={{
-          color: "#64748b",
-          fontSize: 12,
-          textAlign: "center",
-          marginTop: 20,
-        }}
-      >
-        Transactions and budget are saved in this browser on this device.
-      </p>
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Transactions</h2>
+          <span>{visibleTransactions.length} shown</span>
+        </div>
+
+        <div className="filter-row">
+          <input
+            type="search"
+            placeholder="Search description or category..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+          >
+            <option value="all">All types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expenses</option>
+          </select>
+        </div>
+
+        {visibleTransactions.length === 0 ? (
+          <p className="empty-state">No transactions found.</p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleTransactions.map((transaction) => (
+                  <tr key={transaction.id}>
+                    <td>{transaction.date}</td>
+                    <td>{transaction.title}</td>
+                    <td>{transaction.category}</td>
+                    <td>
+                      <span
+                        className={
+                          transaction.type === "income"
+                            ? "income-text"
+                            : "expense-text"
+                        }
+                      >
+                        {transaction.type}
+                      </span>
+                    </td>
+                    <td>{money(transaction.amount)}</td>
+                    <td>
+                      <button
+                        className="delete-button"
+                        onClick={() => deleteTransaction(transaction.id)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <button
+          className="danger-button"
+          type="button"
+          onClick={clearAllTransactions}
+        >
+          Clear All Transactions
+        </button>
+      </section>
+
+      <footer className="app-footer">
+        <p>
+          Your transactions are saved in this browser using localStorage.
+          No Firebase login or cloud database is used.
+        </p>
+        <p>Remember to export a backup of your data regularly.</p>
+      </footer>
     </main>
   );
 }
